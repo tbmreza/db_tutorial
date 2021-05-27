@@ -1,3 +1,5 @@
+#include <boost/algorithm/string.hpp>
+#include <boost/lexical_cast.hpp>
 #include <iostream>
 #include <string>
 
@@ -9,6 +11,7 @@ typedef enum {
 typedef enum {
   PREPARE_SUCCESS,
   PREPARE_UNRECOGNIZED,
+  PREPARE_SYNTAX_ERROR,
 } PrepareResult;
 
 typedef enum {
@@ -21,8 +24,8 @@ typedef enum {
 
 typedef struct {
   uint32_t id;
-  char username[COL_SIZE_USERNAME];
-  char email[COL_SIZE_EMAIL];
+  std::string username;  // char username[COL_SIZE_USERNAME];
+  std::string email;     // char email[COL_SIZE_EMAIL];
 } Row;
 
 typedef struct {
@@ -38,8 +41,28 @@ MetaCommandResult do_meta_command(std::string input) {
   }
 }
 
+typedef std::vector<std::string> split_vector;
+
 PrepareResult prepare_statement(std::string input, Statement* statement) {
-  if (input == "insert") {
+  split_vector words;
+  boost::split(words, input, boost::is_any_of(" "));
+  if (words.size() < 4) {
+    return PREPARE_SYNTAX_ERROR;
+  }
+
+  uint32_t id;
+  try {
+    id = boost::lexical_cast<uint32_t>(words[1]);
+  } catch (const boost::bad_lexical_cast& e) {
+    std::cerr << e.what() << '\n';
+    return PREPARE_SYNTAX_ERROR;
+  }
+
+  statement->row_to_insert.id = id;
+  statement->row_to_insert.username = words[2];
+  statement->row_to_insert.email = words[3];
+
+  if (words[0] == "insert") {
     statement->type = STATEMENT_INSERT;
     return PREPARE_SUCCESS;
   }
@@ -82,6 +105,9 @@ int main() {
 
     Statement s;
     switch (prepare_statement(input, &s)) {
+      case (PREPARE_SYNTAX_ERROR):
+        std::cout << "Syntax error" << std::endl;
+        continue;
       case (PREPARE_UNRECOGNIZED):
         std::cout << "Unrecognized keyword at \"" << input << "\"\n";
         continue;
